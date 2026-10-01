@@ -31,13 +31,38 @@ export function PlanProjectModal({ isOpen, onClose, project }: PlanProjectModalP
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<ProjectPlanResult | null>(null);
+  const [selectedMilestones, setSelectedMilestones] = useState<Record<number, boolean>>({});
+  const [selectedTasks, setSelectedTasks] = useState<Record<string, boolean>>({});
+  const [editedMilestones, setEditedMilestones] = useState<Record<number, string>>({});
+  const [editedTasks, setEditedTasks] = useState<Record<string, string>>({});
 
   const handleGenerate = async () => {
     setIsGenerating(true);
     try {
       const plan = await clientPlanProject(project.name, project.description);
       setGeneratedPlan(plan);
-      success('AI Roadmap Generated', `Generated ${plan.milestones.length} milestones.`);
+      
+      // Initialize selections to all true
+      const mSel: Record<number, boolean> = {};
+      const tSel: Record<string, boolean> = {};
+      const mEd: Record<number, string> = {};
+      const tEd: Record<string, string> = {};
+
+      plan.milestones.forEach((m, mIdx) => {
+        mSel[mIdx] = true;
+        mEd[mIdx] = m.title;
+        m.tasks.forEach((t, tIdx) => {
+          tSel[`${mIdx}-${tIdx}`] = true;
+          tEd[`${mIdx}-${tIdx}`] = t.title;
+        });
+      });
+
+      setSelectedMilestones(mSel);
+      setSelectedTasks(tSel);
+      setEditedMilestones(mEd);
+      setEditedTasks(tEd);
+
+      success('AI Roadmap Generated', `Generated ${plan.milestones.length} milestones. Select & customize below.`);
     } catch (err) {
       error('Planning failed', 'Check project parameters or retry.');
     } finally {
@@ -48,28 +73,39 @@ export function PlanProjectModal({ isOpen, onClose, project }: PlanProjectModalP
   const handleApplyRoadmap = () => {
     if (!generatedPlan) return;
 
-    // 1. Update project milestones
-    const newMilestones = generatedPlan.milestones.map((m, mIdx) => ({
-      id: `ms-${project.id}-${Date.now()}-${mIdx}`,
-      title: m.title,
-      targetDate: m.targetDate,
-      completed: false,
-      order: m.order || mIdx + 1,
-    }));
+    // 1. Filter and update selected milestones
+    const acceptedMilestones = generatedPlan.milestones
+      .map((m, mIdx) => {
+        if (!selectedMilestones[mIdx]) return null;
+        return {
+          id: `ms-${project.id}-${Date.now()}-${mIdx}`,
+          title: editedMilestones[mIdx] || m.title,
+          targetDate: m.targetDate,
+          completed: false,
+          order: m.order || mIdx + 1,
+        };
+      })
+      .filter(Boolean);
 
     actions.saveProject({
       ...project,
-      milestones: [...project.milestones, ...newMilestones],
+      milestones: [...project.milestones, ...(acceptedMilestones as any[])],
     });
 
-    // 2. Add tasks into store
+    // 2. Add selected tasks into store
     let taskCount = 0;
     generatedPlan.milestones.forEach((m, mIdx) => {
+      // Only include tasks if milestone is also selected
+      if (!selectedMilestones[mIdx]) return;
+
       m.tasks.forEach((t, tIdx) => {
+        const key = `${mIdx}-${tIdx}`;
+        if (!selectedTasks[key]) return;
+
         const newTask: Task = {
           id: `task-plan-${Date.now()}-${mIdx}-${tIdx}`,
-          title: t.title,
-          description: t.description || `Milestone: ${m.title}`,
+          title: editedTasks[key] || t.title,
+          description: t.description || `Milestone: ${editedMilestones[mIdx] || m.title}`,
           status: 'todo',
           priority: t.priority,
           dueDate: m.targetDate,
@@ -91,7 +127,7 @@ export function PlanProjectModal({ isOpen, onClose, project }: PlanProjectModalP
       });
     });
 
-    success('Roadmap Applied', `${taskCount} task(s) and ${newMilestones.length} milestone(s) added.`);
+    success('Roadmap Applied', `${taskCount} task(s) and ${acceptedMilestones.length} milestone(s) added.`);
     setGeneratedPlan(null);
     onClose();
   };
@@ -101,7 +137,7 @@ export function PlanProjectModal({ isOpen, onClose, project }: PlanProjectModalP
       isOpen={isOpen}
       onClose={onClose}
       title={`Plan "${project.name}" with AI`}
-      description="FlowBridge will decompose this project into sequential milestones, critical dependencies, and estimated task durations."
+      description="FlowBridge will decompose this project into sequential milestones, critical dependencies, and estimated task durations. Customize items before saving."
       maxWidth="2xl"
     >
       <div className="space-y-4 text-xs">
@@ -170,55 +206,123 @@ export function PlanProjectModal({ isOpen, onClose, project }: PlanProjectModalP
               </div>
             )}
 
-            {/* Milestones and Tasks */}
+            {/* Milestones and Tasks Selection */}
             <div className="space-y-3">
-              <p className="font-bold text-slate-900">
-                Milestones & Sequential Tasks ({generatedPlan.milestones.length})
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-slate-900">
+                  Milestones & Action Items ({generatedPlan.milestones.length})
+                </p>
+                <span className="text-[10px] text-slate-400">
+                  Check items to keep & edit titles directly
+                </span>
+              </div>
 
-              {generatedPlan.milestones.map((m, mIdx) => (
-                <div
-                  key={mIdx}
-                  className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2.5 shadow-2xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-semibold text-slate-900">{m.title}</h4>
-                      {m.description && (
-                        <p className="text-[11px] text-slate-500 mt-0.5">{m.description}</p>
+              {generatedPlan.milestones.map((m, mIdx) => {
+                const isMilestoneSelected = selectedMilestones[mIdx] ?? true;
+
+                return (
+                  <div
+                    key={mIdx}
+                    className={`rounded-xl border transition-all p-3.5 space-y-2.5 ${
+                      isMilestoneSelected
+                        ? 'border-slate-200 bg-white shadow-2xs'
+                        : 'border-slate-200/60 bg-slate-50/60 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isMilestoneSelected}
+                        onChange={(e) =>
+                          setSelectedMilestones((prev) => ({
+                            ...prev,
+                            [mIdx]: e.target.checked,
+                          }))
+                        }
+                        className="mt-1 h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={editedMilestones[mIdx] ?? m.title}
+                          onChange={(e) =>
+                            setEditedMilestones((prev) => ({
+                              ...prev,
+                              [mIdx]: e.target.value,
+                            }))
+                          }
+                          disabled={!isMilestoneSelected}
+                          className="w-full text-xs font-semibold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-hidden py-0.5"
+                        />
+                        {m.description && (
+                          <p className="text-[11px] text-slate-500 mt-0.5">{m.description}</p>
+                        )}
+                      </div>
+                      {m.targetDate && (
+                        <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-medium shrink-0 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" /> {m.targetDate}
+                        </span>
                       )}
                     </div>
-                    {m.targetDate && (
-                      <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-medium flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Target: {m.targetDate}
-                      </span>
+
+                    {/* Tasks inside this milestone */}
+                    {isMilestoneSelected && (
+                      <div className="space-y-1.5 pl-5 border-l-2 border-indigo-200 ml-1.5">
+                        {m.tasks.map((t, tIdx) => {
+                          const key = `${mIdx}-${tIdx}`;
+                          const isTaskSelected = selectedTasks[key] ?? true;
+
+                          return (
+                            <div
+                              key={tIdx}
+                              className={`flex items-start gap-2 p-2 rounded-lg border transition-all ${
+                                isTaskSelected
+                                  ? 'bg-slate-50/80 border-slate-200'
+                                  : 'bg-slate-100/50 border-slate-100 opacity-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isTaskSelected}
+                                onChange={(e) =>
+                                  setSelectedTasks((prev) => ({
+                                    ...prev,
+                                    [key]: e.target.checked,
+                                  }))
+                                }
+                                className="mt-1 h-3 w-3 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <input
+                                  type="text"
+                                  value={editedTasks[key] ?? t.title}
+                                  onChange={(e) =>
+                                    setEditedTasks((prev) => ({
+                                      ...prev,
+                                      [key]: e.target.value,
+                                    }))
+                                  }
+                                  disabled={!isTaskSelected}
+                                  className="w-full text-[11px] font-medium text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-hidden py-0.5"
+                                />
+                                {t.dependencies && t.dependencies.length > 0 && (
+                                  <p className="text-[10px] text-slate-400 mt-0.5">
+                                    Requires: {t.dependencies.join(', ')}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="text-[10px] text-slate-400">~{t.estimatedMinutes}m</span>
+                                <PriorityBadge priority={t.priority} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
-
-                  {/* Tasks inside this milestone */}
-                  <div className="space-y-1.5 pl-2 border-l-2 border-indigo-200">
-                    {m.tasks.map((t, tIdx) => (
-                      <div
-                        key={tIdx}
-                        className="flex items-start justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 gap-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 leading-tight">{t.title}</p>
-                          {t.dependencies && t.dependencies.length > 0 && (
-                            <p className="text-[10px] text-slate-400 mt-0.5">
-                              Requires: {t.dependencies.join(', ')}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-[10px] text-slate-400">~{t.estimatedMinutes}m</span>
-                          <PriorityBadge priority={t.priority} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Footer buttons */}
@@ -238,7 +342,7 @@ export function PlanProjectModal({ isOpen, onClose, project }: PlanProjectModalP
                 className="gap-1.5"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>Add Roadmap & Tasks to Project</span>
+                <span>Add Selected Roadmap & Tasks</span>
               </Button>
             </div>
           </div>

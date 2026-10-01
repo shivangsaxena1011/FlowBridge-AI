@@ -7,6 +7,8 @@ import {
   TaskBreakdownResult,
   DailyPlanSchema,
   DailyPlanResult,
+  TaskRefinementSchema,
+  TaskRefinementResult,
 } from './types';
 import { safeJsonParse } from './parser';
 import { AI_SYSTEM_PROMPTS } from './prompts';
@@ -15,6 +17,7 @@ import {
   deterministicPlanProject,
   deterministicBreakdownTask,
   deterministicPrioritizeTasks,
+  deterministicRefineTask,
 } from './deterministic';
 import { Task } from '@/types';
 
@@ -156,4 +159,21 @@ export async function aiPrioritizeDailyTasks(tasks: Task[]): Promise<DailyPlanRe
   }
 
   return deterministicPrioritizeTasks(tasks);
+}
+
+export async function aiRefineTask(
+  taskTitle: string,
+  currentDescription: string = ''
+): Promise<TaskRefinementResult> {
+  const userPrompt = `Task Title: "${taskTitle}"\nCurrent Description: "${currentDescription}"\n\nReturn the structured TaskRefinement JSON object.`;
+
+  const llmResponse = await callLlmChat(AI_SYSTEM_PROMPTS.REFINE_TASK, userPrompt);
+  if (llmResponse) {
+    const parsed = safeJsonParse(llmResponse, TaskRefinementSchema);
+    if (parsed.success) {
+      return parsed.data;
+    }
+  }
+
+  return deterministicRefineTask(taskTitle, currentDescription);
 }

@@ -248,6 +248,18 @@ function FocusContent() {
               {selectedTask.description && (
                 <p className="text-xs text-slate-600">{selectedTask.description}</p>
               )}
+
+              {/* Explicit Why It Matters Callout */}
+              <div className="mt-2 p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-[11px] text-indigo-950 flex items-start gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-indigo-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-indigo-900">Why this matters: </span>
+                  <span>
+                    {selectedTask.aiRationale ||
+                      `Target deliverable with ${selectedTask.priority} urgency. Completing this session advances your active project milestone.`}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <Button
@@ -263,9 +275,17 @@ function FocusContent() {
 
           {/* TIMER DISPLAY */}
           <div className="py-6 flex flex-col items-center justify-center space-y-4 bg-slate-50/70 rounded-2xl border border-slate-100">
-            {/* Progress ring/pill */}
+            {/* Timer digits */}
             <div className="text-5xl sm:text-6xl font-extrabold tracking-tight font-mono text-slate-900 tabular-nums">
               {timeFormatted}
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-52 bg-slate-200/80 rounded-full h-1.5 overflow-hidden">
+              <div
+                className="bg-indigo-600 h-full rounded-full transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
             </div>
 
             {/* Time duration presets */}

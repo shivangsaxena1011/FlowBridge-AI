@@ -82,8 +82,11 @@ export default function InsightsPage() {
         </div>
 
         {metrics.insights.length === 0 ? (
-          <Card className="p-6 text-center text-xs text-slate-400">
-            Complete more tasks and focus sessions to generate diagnostic observations.
+          <Card className="p-8 text-center space-y-2">
+            <p className="text-xs font-semibold text-slate-700">Your insights will appear as you work.</p>
+            <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+              Complete tasks, plan projects, or finish focus sessions to generate objective behavioral observations and execution velocity diagnostics.
+            </p>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

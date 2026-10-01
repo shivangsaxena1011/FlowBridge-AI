@@ -10,14 +10,16 @@ import {
   FolderKanban,
   CheckCircle2,
   Tag,
-  Flame,
+  Wand2,
+  Timer,
+  Lightbulb,
 } from 'lucide-react';
 import { Modal } from '@/ui/modal';
 import { Button } from '@/ui/button';
 import { Input, Textarea } from '@/ui/input';
 import { PriorityBadge } from '@/ui/badge';
 import { useFlowBridgeStore } from '@/lib/data/store';
-import { clientBreakdownTask } from '@/lib/ai/client';
+import { clientBreakdownTask, clientRefineTask } from '@/lib/ai/client';
 import { useToast } from '@/ui/toast';
 import { Task, TaskPriority, TaskStatus, Subtask } from '@/types';
 
@@ -42,7 +44,8 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
-  const [isBreakingDown, setIsBreakingDown] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiRationaleNotice, setAiRationaleNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (task) {
@@ -55,6 +58,7 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
       setProjectId(task.projectId || '');
       setSubtasks(task.subtasks || []);
       setTags(task.tags || []);
+      setAiRationaleNotice(task.aiRationale || null);
     } else {
       // Defaults for new task
       setTitle('');
@@ -66,6 +70,7 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
       setProjectId('');
       setSubtasks([]);
       setTags([]);
+      setAiRationaleNotice(null);
     }
   }, [task, isOpen]);
 
@@ -103,12 +108,13 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
+  // AI ACTION 1: Break this down into execution steps
   const handleBreakdownWithAi = async () => {
     if (!title.trim()) {
       info('Title required', 'Provide a task title first to break it down.');
       return;
     }
-    setIsBreakingDown(true);
+    setIsAiLoading(true);
     try {
       const breakdown = await clientBreakdownTask(title, description);
       const generatedSubtasks: Subtask[] = breakdown.steps.map((step, idx) => ({
@@ -122,11 +128,51 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
       if (breakdown.estimatedTotalMinutes) {
         setEstimatedMinutes(breakdown.estimatedTotalMinutes);
       }
-      success('Task Broken Down', `Generated ${breakdown.steps.length} sequential execution steps.`);
+      success('Deconstructed', `Added ${breakdown.steps.length} sequential steps.`);
     } catch {
       info('Notice', 'AI breakdown generated fallback steps.');
     } finally {
-      setIsBreakingDown(false);
+      setIsAiLoading(false);
+    }
+  };
+
+  // AI ACTION 2: Make this clearer (Refine task title & Definition of Done)
+  const handleMakeClearerWithAi = async () => {
+    if (!title.trim()) return;
+    setIsAiLoading(true);
+    try {
+      const refined = await clientRefineTask(title, description);
+      setTitle(refined.improvedTitle);
+      setDescription(refined.improvedDescription);
+      setPriority(refined.suggestedPriority);
+      setEstimatedMinutes(refined.estimatedMinutes);
+      setAiRationaleNotice(refined.clarityRationale);
+      success('Task Refined', 'Title and Definition of Done updated with high clarity.');
+    } catch {
+      info('Notice', 'Task clarified.');
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // AI ACTION 3: Suggest immediate next step
+  const handleSuggestNextStep = async () => {
+    if (!title.trim()) return;
+    setIsAiLoading(true);
+    try {
+      const refined = await clientRefineTask(title, description);
+      if (refined.immediateNextStep) {
+        const nextSt: Subtask = {
+          id: 'sub-ai-next-' + Date.now(),
+          title: `Step 1: ${refined.immediateNextStep}`,
+          completed: false,
+          createdAt: new Date().toISOString(),
+        };
+        setSubtasks([nextSt, ...subtasks]);
+        success('Immediate Step Added', refined.immediateNextStep);
+      }
+    } finally {
+      setIsAiLoading(false);
     }
   };
 
@@ -145,6 +191,7 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
       projectId: projectId || undefined,
       subtasks,
       tags,
+      aiRationale: aiRationaleNotice || task?.aiRationale,
       completedAt: status === 'completed' ? task?.completedAt || new Date().toISOString() : undefined,
       createdAt: task ? task.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -159,14 +206,29 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={task ? 'Edit Task' : 'Create Task'}
-      description="Define scope, priority, and actionable breakdown steps."
+      title={task ? 'Task Details' : 'Create Task'}
+      description="Define scope, priority, and actionable execution checklist."
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         {/* Title */}
         <div className="space-y-1">
-          <label className="font-semibold text-slate-700">Task Title</label>
+          <div className="flex items-center justify-between">
+            <label className="font-semibold text-slate-700">Task Title</label>
+            {/* AI Action Chips */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleMakeClearerWithAi}
+                disabled={isAiLoading || !title.trim()}
+                className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                title="Rewrite with active verb & explicit criteria"
+              >
+                <Wand2 className="h-3 w-3" />
+                <span>Make clearer</span>
+              </button>
+            </div>
+          </div>
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -176,18 +238,26 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
           />
         </div>
 
-        {/* Description */}
+        {/* AI Rationale Notice if generated */}
+        {aiRationaleNotice && (
+          <div className="p-2 rounded-lg bg-indigo-50/70 border border-indigo-100 text-[11px] text-indigo-900 flex items-start gap-1.5">
+            <Sparkles className="h-3 w-3 text-indigo-600 shrink-0 mt-0.5" />
+            <span>{aiRationaleNotice}</span>
+          </div>
+        )}
+
+        {/* Description & Notes */}
         <div className="space-y-1">
-          <label className="font-semibold text-slate-700">Context & Notes</label>
+          <label className="font-semibold text-slate-700">Description & Definition of Done</label>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Relevant context, links, or expectations..."
-            rows={2}
+            placeholder="Relevant context, acceptance criteria, or links..."
+            rows={3}
           />
         </div>
 
-        {/* Priority & Status Row */}
+        {/* Priority & Status */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="font-semibold text-slate-700">Priority</label>
@@ -218,7 +288,7 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
           </div>
         </div>
 
-        {/* Due Date & Project Row */}
+        {/* Due Date & Project */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="font-semibold text-slate-700 flex items-center gap-1">
@@ -250,24 +320,92 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
           </div>
         </div>
 
-        {/* Subtasks with AI Breakdown Action */}
+        {/* Estimated Minutes */}
+        <div className="space-y-1">
+          <label className="font-semibold text-slate-700 flex items-center gap-1">
+            <Clock className="h-3 w-3 text-slate-400" /> Estimated Duration (minutes)
+          </label>
+          <Input
+            type="number"
+            min={5}
+            step={5}
+            value={estimatedMinutes}
+            onChange={(e) => setEstimatedMinutes(Number(e.target.value))}
+            className="w-36"
+          />
+        </div>
+
+        {/* Tags */}
+        <div className="space-y-1.5 pt-1">
+          <label className="font-semibold text-slate-700 flex items-center gap-1">
+            <Tag className="h-3 w-3 text-slate-400" /> Tags
+          </label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {tags.map((t) => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-medium"
+              >
+                #{t}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveTag(t)}
+                  className="hover:text-rose-600 ml-0.5"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddTag();
+                  }
+                }}
+                placeholder="Add tag..."
+                className="h-7 px-2 text-[11px] border border-slate-200 rounded bg-white w-24 focus:outline-none focus:border-indigo-600"
+              />
+              <Button type="button" variant="outline" size="sm" onClick={handleAddTag} className="h-7 px-2 text-[10px]">
+                Add
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Subtasks with AI Actions */}
         <div className="space-y-2 pt-2 border-t border-slate-100">
           <div className="flex items-center justify-between">
             <label className="font-semibold text-slate-700">
-              Subtasks / Execution Steps ({subtasks.length})
+              Checklist / Micro-steps ({subtasks.length})
             </label>
-            <button
-              type="button"
-              onClick={handleBreakdownWithAi}
-              disabled={isBreakingDown}
-              className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
-            >
-              <Sparkles className="h-3 w-3" />
-              <span>{isBreakingDown ? 'Analyzing...' : 'AI Break Down'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSuggestNextStep}
+                disabled={isAiLoading || !title.trim()}
+                className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
+              >
+                <Lightbulb className="h-3 w-3 text-amber-500" />
+                <span>Next step</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleBreakdownWithAi}
+                disabled={isAiLoading || !title.trim()}
+                className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+              >
+                <Sparkles className="h-3 w-3" />
+                <span>Break down</span>
+              </button>
+            </div>
           </div>
 
-          {/* Subtask items */}
+          {/* Subtask list */}
           <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
             {subtasks.map((st) => (
               <div
@@ -331,7 +469,7 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" size="sm" className="gap-1.5">
+          <Button type="submit" size="sm" className="gap-1.5 font-semibold">
             <CheckCircle2 className="h-3.5 w-3.5" />
             <span>{task ? 'Save Changes' : 'Create Task'}</span>
           </Button>

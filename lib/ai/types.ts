@@ -82,12 +82,34 @@ export const DailyPriorityRankSchema = z.object({
   suggestedSequence: z.number(),
 });
 
+export const DailyScheduleBlockSchema = z.object({
+  timeSlot: z.string(),
+  title: z.string(),
+  taskId: z.string().optional(),
+  focusType: z.enum(['deep_work', 'collaborative', 'quick_wins', 'wrap_up']),
+  durationMinutes: z.number().default(45),
+});
+
+export type DailyScheduleBlock = z.infer<typeof DailyScheduleBlockSchema>;
+
 export const DailyPlanSchema = z.object({
   headline: z.string(),
   summary: z.string(),
   highestImpactTaskId: z.string().optional(),
   rankedTasks: z.array(DailyPriorityRankSchema),
+  scheduleBlocks: z.array(DailyScheduleBlockSchema).default([]),
   energyRecommendation: z.string(),
 });
 
 export type DailyPlanResult = z.infer<typeof DailyPlanSchema>;
+
+export const TaskRefinementSchema = z.object({
+  improvedTitle: z.string(),
+  improvedDescription: z.string(),
+  suggestedPriority: TaskPrioritySchema,
+  estimatedMinutes: z.number(),
+  immediateNextStep: z.string(),
+  clarityRationale: z.string(),
+});
+
+export type TaskRefinementResult = z.infer<typeof TaskRefinementSchema>;

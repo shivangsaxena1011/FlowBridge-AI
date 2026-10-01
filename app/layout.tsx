@@ -22,16 +22,31 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'FlowBridge AI — Turn Scattered Work into Clear Action',
   description:
-    'An intelligent productivity copilot that converts scattered thoughts, voice notes, screenshots, and documents into prioritized, executable workflows.',
+    'FlowBridge captures notes, ideas, meetings, screenshots and files, understands what matters, and turns them into organized work you can actually execute.',
   keywords: [
     'AI productivity',
     'task management',
-    'execution engine',
+    'execution layer',
     'voice capture',
     'project planning',
     'focus timer',
+    'smart inbox',
   ],
-  authors: [{ name: 'FlowBridge Team' }],
+  authors: [{ name: 'FlowBridge Systems Inc.' }],
+  openGraph: {
+    title: 'FlowBridge AI — Turn Scattered Work into Clear Action',
+    description:
+      'FlowBridge captures notes, ideas, meetings, screenshots and files, understands what matters, and turns them into organized work you can actually execute.',
+    type: 'website',
+    locale: 'en_US',
+    siteName: 'FlowBridge AI',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'FlowBridge AI — Turn Scattered Work into Clear Action',
+    description:
+      'FlowBridge captures notes, ideas, meetings, screenshots and files, understands what matters, and turns them into organized work you can actually execute.',
+  },
 };
 
 export default function RootLayout({

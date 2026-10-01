@@ -3,6 +3,8 @@ import {
   ProjectPlanResult,
   TaskBreakdownResult,
   DailyPlanResult,
+  DailyScheduleBlock,
+  TaskRefinementResult,
 } from './types';
 import { Task, TaskPriority } from '@/types';
 
@@ -539,6 +541,7 @@ export function deterministicPrioritizeTasks(tasks: Task[]): DailyPlanResult {
       headline: 'Clear horizon for today',
       summary: 'You have no open tasks scheduled. Capture new notes in your Inbox or plan an upcoming project.',
       rankedTasks: [],
+      scheduleBlocks: [],
       energyRecommendation: 'A great day to plan strategic objectives or recharge.',
     };
   }
@@ -599,6 +602,47 @@ export function deterministicPrioritizeTasks(tasks: Task[]): DailyPlanResult {
 
   const topTask = scored[0]?.task;
 
+  // Build realistic chronological schedule blocks
+  const scheduleBlocks: DailyScheduleBlock[] = [];
+  if (topTask) {
+    scheduleBlocks.push({
+      timeSlot: '09:15 - 10:45',
+      title: `Deep Work: ${topTask.title}`,
+      taskId: topTask.id,
+      focusType: 'deep_work',
+      durationMinutes: topTask.estimatedMinutes || 90,
+    });
+  }
+
+  const secondTask = scored[1]?.task;
+  if (secondTask) {
+    scheduleBlocks.push({
+      timeSlot: '11:00 - 12:15',
+      title: `Execution: ${secondTask.title}`,
+      taskId: secondTask.id,
+      focusType: 'deep_work',
+      durationMinutes: secondTask.estimatedMinutes || 75,
+    });
+  }
+
+  const thirdTask = scored[2]?.task;
+  if (thirdTask) {
+    scheduleBlocks.push({
+      timeSlot: '13:30 - 14:30',
+      title: `Collaboration & Delivery: ${thirdTask.title}`,
+      taskId: thirdTask.id,
+      focusType: 'collaborative',
+      durationMinutes: thirdTask.estimatedMinutes || 60,
+    });
+  }
+
+  scheduleBlocks.push({
+    timeSlot: '16:00 - 16:45',
+    title: 'Inbox Zero & Next-Day Triage',
+    focusType: 'quick_wins',
+    durationMinutes: 45,
+  });
+
   return {
     headline: topTask ? `Focus on "${topTask.title}"` : "Today's Execution Blueprint",
     summary: topTask
@@ -606,7 +650,54 @@ export function deterministicPrioritizeTasks(tasks: Task[]): DailyPlanResult {
       : 'All pending work categorized by urgency and impact.',
     highestImpactTaskId: topTask?.id,
     rankedTasks,
+    scheduleBlocks,
     energyRecommendation:
       'Tackle your top priority during your peak focus window this morning. Reserve quick communications and admin tasks for the afternoon.',
+  };
+}
+
+export function deterministicRefineTask(
+  taskTitle: string,
+  currentDescription: string = ''
+): TaskRefinementResult {
+  const cleanTitle = taskTitle.trim();
+  const lower = cleanTitle.toLowerCase();
+
+  let improvedTitle = cleanTitle;
+  // Ensure starts with strong imperative action verb
+  if (!/^(conduct|finalize|implement|draft|review|prepare|audit|deploy|design|configure|verify)/i.test(cleanTitle)) {
+    improvedTitle = `Finalize and deliver: ${cleanTitle}`;
+  }
+
+  let suggestedPriority: TaskPriority = 'high';
+  let estimatedMinutes = 45;
+  let immediateNextStep = 'Review target requirements and open primary workspace.';
+
+  if (/report|paper|write|document|deck/i.test(lower)) {
+    suggestedPriority = 'high';
+    estimatedMinutes = 60;
+    immediateNextStep = 'Outline 3 key section headings and bullet point the primary data findings.';
+  } else if (/api|code|bug|build|deploy|test/i.test(lower)) {
+    suggestedPriority = 'urgent';
+    estimatedMinutes = 45;
+    immediateNextStep = 'Write the failing test assertion or verify endpoint contract response.';
+  } else if (/call|sync|meet|email|client/i.test(lower)) {
+    suggestedPriority = 'medium';
+    estimatedMinutes = 30;
+    immediateNextStep = 'Draft bullet agenda with required outcome decisions.';
+  }
+
+  const improvedDescription = currentDescription
+    ? `${currentDescription.trim()}\n\nDefinition of Done: Objective verified, edge cases validated, and status documented in FlowBridge.`
+    : `Scope: Execute ${cleanTitle} with verified criteria.\n\nDefinition of Done: Core deliverable completed and unblocked for collaborators.`;
+
+  return {
+    improvedTitle,
+    improvedDescription,
+    suggestedPriority,
+    estimatedMinutes,
+    immediateNextStep,
+    clarityRationale:
+      'Re-framed with an imperative action verb, explicit Definition of Done criteria, and a low-activation next micro-step.',
   };
 }

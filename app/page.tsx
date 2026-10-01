@@ -134,19 +134,19 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto leading-relaxed">
-            FlowBridge AI converts messy notes, voice transcripts, screenshots, and scattered deadlines into organized, prioritized tasks and structured focus sessions.
+            FlowBridge captures notes, ideas, meetings, screenshots and files, understands what matters, and turns them into organized work you can actually execute.
           </p>
 
           <div className="pt-3 flex flex-wrap items-center justify-center gap-3">
             <Link href="/app">
               <Button size="lg" className="gap-2 text-sm shadow-md shadow-indigo-600/25">
-                <span>Start organizing</span>
+                <span>Start using FlowBridge</span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <a href="#demo">
+            <a href="#how-it-works">
               <Button variant="outline" size="lg" className="text-sm">
-                See how it works
+                Explore the workflow
               </Button>
             </a>
           </div>

@@ -3,12 +3,14 @@ import {
   ProjectPlanResult,
   TaskBreakdownResult,
   DailyPlanResult,
+  TaskRefinementResult,
 } from './types';
 import {
   deterministicExtractWork,
   deterministicPlanProject,
   deterministicBreakdownTask,
   deterministicPrioritizeTasks,
+  deterministicRefineTask,
 } from './deterministic';
 import { Task } from '@/types';
 
@@ -96,4 +98,26 @@ export async function clientPrioritizeTasks(tasks: Task[]): Promise<DailyPlanRes
   }
 
   return deterministicPrioritizeTasks(tasks);
+}
+
+export async function clientRefineTask(
+  taskTitle: string,
+  currentDescription: string = ''
+): Promise<TaskRefinementResult> {
+  try {
+    const res = await fetch('/api/ai/refine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskTitle, currentDescription }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.data) return data.data;
+    }
+  } catch (err) {
+    console.warn('Network error calling /api/ai/refine, using local fallback:', err);
+  }
+
+  return deterministicRefineTask(taskTitle, currentDescription);
 }
